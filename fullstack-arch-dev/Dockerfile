@@ -24,6 +24,10 @@ RUN pacman -Syu --noconfirm && \
   redis php php-gd php-intl composer nodejs npm yarn typescript ts-node \
   && pacman -Scc --noconfirm && rm -rf /var/cache/pacman/pkg/*
 
+# Copy Superset entrypoint script and make executable (run as root!)
+COPY superset/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create non-root user with zsh shell
 RUN groupadd -g $GID $USER && \
   useradd -m -u $UID -g $GID -s /bin/zsh $USER && \
@@ -64,13 +68,12 @@ RUN python -m venv superset-env && \
   ./superset-env/bin/pip install --upgrade pip setuptools wheel && \
   ./superset-env/bin/pip install -r $HOME/requirements.txt
 
-# Copy Superset scripts and config
-COPY superset/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Copy Superset config and aliases
 COPY superset/superset_config.py $HOME/.superset/superset_config.py
 COPY superset/aliases.zsh $HOME/.superset_aliases
 
-RUN echo "source ~/.superset_aliases" >> ~/.zshrc && \
-  chmod +x /usr/local/bin/docker-entrypoint.sh
+# Source aliases in zshrc (run as non-root)
+RUN echo "source ~/.superset_aliases" >> ~/.zshrc
 
 # Expose relevant ports
 EXPOSE 3000 4200 8000 8080 8088 5432 3306 6379 27017
