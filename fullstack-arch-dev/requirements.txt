@@ -1,0 +1,8 @@
+apache-superset
+mysqlclient
+redis
+psycopg2-binary
+pymongo
+mongoengine
+python-dotenv
+python-memcached
