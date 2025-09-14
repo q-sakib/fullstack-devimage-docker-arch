@@ -62,6 +62,17 @@ RUN mkdir -p $HOME/.superset && chown $USER:$USER $HOME/.superset
 RUN composer global require laravel/installer && \
   echo 'export PATH="$HOME/.composer/vendor/bin:$PATH"' >> ~/.zshrc
 
+
+# 🔄 Temporarily switch to root to install netcat
+USER root
+RUN pacman -Sy --noconfirm inetutils
+
+# 👤 Switch back to devuser
+# USER devuser
+USER $USER
+WORKDIR /home/$USER
+
+  
 # Copy requirements and install python deps
 COPY requirements.txt $HOME/requirements.txt
 RUN python -m venv superset-env && \
