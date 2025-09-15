@@ -1,0 +1,31 @@
+# Core Superset
+apache-superset
+
+# Flask and web stack
+flask>=2.3,<3.0
+flask-appbuilder>=4.3.0
+flask-sqlalchemy>=3.0.0
+werkzeug>=2.3.0
+
+# Superset dependencies
+marshmallow>=3.20.0,<4.0.0
+flask-limiter<3.0
+celery>=5.3.6
+python-dotenv
+python-memcached
+python-graphql-client
+gunicorn
+
+# Data + Viz
+pandas
+numpy==1.26.4
+pyarrow
+pillow
+
+# Database drivers
+psycopg2-binary
+mysqlclient
+pymysql
+redis
+pymongo
+mongoengine

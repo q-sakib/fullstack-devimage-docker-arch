@@ -5,6 +5,7 @@ echo "▶️ Starting Superset Setup..."
 
 # Activate virtual environment
 source /home/devuser/superset-env/bin/activate
+echo "Virtual env activated: $(which python)"
 
 # Function to wait for a service to be ready
 wait_for_service() {
@@ -21,7 +22,7 @@ wait_for_service() {
 wait_for_service "mysql" 3306
 wait_for_service "postgres" 5432
 wait_for_service "redis" 6379
-wait_for_service "mongodb" 27017
+# wait_for_service "mongodb" 27017
 
 echo "✅ All dependencies are up."
 
@@ -44,4 +45,5 @@ superset init
 
 # Start Superset server
 echo "🚀 Starting Superset server on 0.0.0.0:8088..."
-exec superset run -h 0.0.0.0 -p 8088 --with-threads --reload --debugger
+# exec superset run -h 0.0.0.0 -p 8088 --with-threads --reload --debugger
+exec gunicorn -w 3 -k gevent --timeout 120 -b 0.0.0.0:8088 "superset.app:create_app()"

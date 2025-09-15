@@ -44,10 +44,10 @@ RESULTS_BACKEND = RedisCache(
 # ========================
 # 🍃 MongoDB Integration (Optional for custom plugins)
 # ========================
-MONGODB_URI = os.getenv(
-    "MONGODB_URI",
-    "mongodb://shark:sharkX404@mongodb:27017/superset"
-)
+# MONGODB_URI = os.getenv(
+#     "MONGODB_URI",
+#     "mongodb://shark:sharkX404@mongodb:27017/superset"
+# )
 
 # ========================
 # ⚙️ Feature Flags

@@ -1,10 +1,11 @@
-version: "3.9"
+# version: "3.9"
 
 services:
   superset:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dev
     container_name: superset
     ports:
       - "8088:8088"
@@ -17,9 +18,10 @@ services:
       - mysql
       - postgres
       - redis
-      - mongodb
     restart: always
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+    networks:
+      - superset_net
 
   mysql:
     image: mysql:8.0
@@ -34,6 +36,8 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
+    networks:
+      - superset_net
 
   postgres:
     image: postgres:15
@@ -47,6 +51,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    networks:
+      - superset_net
 
   redis:
     image: redis:latest
@@ -54,21 +60,29 @@ services:
     ports:
       - "6379:6379"
     restart: always
+    networks:
+      - superset_net
 
-  mongodb:
-    image: mongo:6.0
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
-    volumes:
-      - mongodb_data:/data/db
-    restart: always
+#  mongodb:
+#    image: mongo:6.0
+#    container_name: mongodb
+#    ports:
+#      - "27017:27017"
+#    environment:
+#      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+#      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+#      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+#    volumes:
+#      - mongodb_data:/data/db
+#    restart: always
+#    networks:
+#      - superset_net
 
 volumes:
   mysql_data:
   postgres_data:
-  mongodb_data:
+#  mongodb_data:
+
+networks:
+  superset_net:
+    driver: bridge
