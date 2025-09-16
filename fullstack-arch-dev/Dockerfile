@@ -32,6 +32,9 @@ RUN mkdir -p /etc/sudoers.d && \
 USER $USER
 WORKDIR $HOME
 
+RUN sudo pacman -S --noconfirm reflector && \
+  sudo reflector --country "US" --age 12 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
 # Install runtime packages (no build tools)
 RUN sudo pacman -Syu --noconfirm && \
   sudo pacman -S --noconfirm python python-pip python-setuptools python-wheel libffi \
@@ -56,7 +59,10 @@ RUN sudo chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Copy requirements and python virtualenv will be created in dev image
 # Copy requirements and install Python deps
-COPY requirements.txt $HOME/requirements.txt
+# COPY requirements.txt $HOME/requirements.txt
+COPY requirements-core.txt requirements-core.txt
+COPY requirements.txt requirements.txt
+COPY constraints.txt constraints.txt
 
 # # Install Python packages into virtualenv
 # RUN python -m venv superset-env && \
@@ -79,9 +85,21 @@ ENV CFLAGS="-Wno-stringop-overflow"
 USER root
 
 # Install build tools and base-devel group, git, vim, etc.
+# RUN pacman -S --noconfirm base-devel git vim tmux htop less openssh openssl cmake gcc make curl wget unzip sudo \
+#   libffi python python-pip python-setuptools python-wheel libxcrypt-compat \
+#   && pacman -Scc --noconfirm && \
+#   rm -rf /var/cache/pacman/pkg/*
+
+
+
+# Update mirrorlist to a faster mirror before installing packages
+RUN sed -i 's|Server = .*|Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch|' /etc/pacman.d/mirrorlist && \
+  pacman -Syu --noconfirm
+
+# Then install packages as usual
 RUN pacman -S --noconfirm base-devel git vim tmux htop less openssh openssl cmake gcc make curl wget unzip sudo \
-  libffi python python-pip python-setuptools python-wheel libxcrypt-compat \
-  && pacman -Scc --noconfirm && \
+  libffi python python-pip python-setuptools python-wheel libxcrypt-compat && \
+  pacman -Scc --noconfirm && \
   rm -rf /var/cache/pacman/pkg/*
 
 USER $USER
@@ -149,7 +167,19 @@ RUN ./superset-env/bin/pip install \
   --only-binary=:all:
 
 # Then install the rest
-RUN ./superset-env/bin/pip install -r $HOME/requirements.txt --no-deps
+# RUN ./superset-env/bin/pip install -r $HOME/requirements.txt --no-deps
+# RUN ./superset-env/bin/pip install -r $HOME/requirements.txt
+# RUN ./superset-env/bin/pip install -r requirements-core.txt -c constraints.txt
+# RUN ./superset-env/bin/pip install -r requirements.txt -c constraints.txt
+COPY requirements-core.txt requirements-core.txt
+COPY requirements.txt requirements.txt
+COPY constraints.txt constraints.txt
+
+RUN ./superset-env/bin/pip install --upgrade pip setuptools wheel
+
+RUN ./superset-env/bin/pip install -r requirements-core.txt -c constraints.txt
+RUN ./superset-env/bin/pip install -r requirements.txt -c constraints.txt
+
 
 # Source aliases in zshrc
 RUN echo "source ~/.superset_aliases" >> ~/.zshrc
@@ -160,3 +190,64 @@ RUN echo "source ~/.superset_aliases" >> ~/.zshrc
 
 # # Switch back to devuser
 # USER devuser
+
+
+
+
+
+
+
+
+
+
+# -----------------------------------
+# Final Stage (Runtime Only, Clean)
+# -----------------------------------
+FROM base AS final
+
+# Copy Python virtualenv from dev
+COPY --from=dev /home/devuser/superset-env /home/devuser/superset-env
+
+# Copy Superset config and requirements.txt
+COPY --from=dev /home/devuser/.superset /home/devuser/.superset
+COPY --from=dev /home/devuser/requirements.txt /home/devuser/requirements.txt
+
+# Copy entrypoint (already executable in dev or base)
+COPY superset/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Ensure correct ownership (prevent potential permission issues)
+RUN sudo chown -R devuser:devuser /home/devuser/superset-env /home/devuser/.superset
+
+# Set runtime environment variables
+ENV PATH="/home/devuser/superset-env/bin:$PATH" \
+  PYTHONPATH="/home/devuser/superset-env/lib/python3.11/site-packages"
+
+# Confirm Flask and Superset CLI available
+RUN /home/devuser/superset-env/bin/python -c "import flask; print('✅ Flask:', flask.__version__)"
+RUN /home/devuser/superset-env/bin/superset version
+
+# Optional: Add alias for interactive sessions
+RUN if [ -f ~/.zshrc ]; then echo 'alias superset="/home/devuser/superset-env/bin/superset"' >> ~/.zshrc; fi
+
+# Optional: Cleanup pycache and temp files to reduce image size
+RUN find /home/devuser/superset-env -type d -name '__pycache__' -exec rm -rf {} + && \
+  rm -rf ~/.cache ~/.npm /tmp/*
+
+# Healthcheck (can be disabled in dev env via docker-compose override)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8088/health || exit 1
+
+# Expose Superset port
+EXPOSE 8088
+
+# Default shell
+SHELL ["/bin/zsh", "-c"]
+
+# Metadata
+LABEL maintainer="yourname@example.com" \
+  description="Production-ready runtime image for Apache Superset with Python 3.11.9"
+
+# Entrypoint and command
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/home/devuser/superset-env/bin/superset", "run", "-h", "0.0.0.0", "-p", "8088"]

@@ -1,6 +1,8 @@
 # Core Superset
 apache-superset
 
+markupsafe>=2.1.0
+
 # Flask and web stack
 flask>=2.3,<3.0
 flask-appbuilder>=4.3.0
@@ -9,7 +11,7 @@ werkzeug>=2.3.0
 
 # Superset dependencies
 marshmallow>=3.20.0,<4.0.0
-flask-limiter<3.0
+flask-limiter>=3.1,<4.0
 celery>=5.3.6
 python-dotenv
 python-memcached
@@ -18,7 +20,7 @@ gunicorn
 
 # Data + Viz
 pandas
-numpy==1.26.4
+numpy>=1.26.4
 pyarrow
 pillow
 
@@ -30,39 +32,7 @@ redis
 pymongo
 mongoengine
 
-
-
-
-
-
-
-
-apache-superset
-marshmallow>=3.20.0,<4.0.0
-gunicorn
-pandas
-numpy==1.26.4
-
-pyarrow
-pillow
-mysqlclient
-pymysql
-redis
-psycopg2-binary
-pymongo
-mongoengine
-python-dotenv
-python-memcached
-python-graphql-client
-flask-limiter<3.0
-celery>=5.3.6
-
-
-
-
-
-
-
-
-
-
+# Forms & CORS
+WTForms>=3.0.0
+flask-wtf
+flask-cors
