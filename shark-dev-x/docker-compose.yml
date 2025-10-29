@@ -1,0 +1,69 @@
+version: "3.8"
+
+services:
+  superset:
+    build:
+      context: ./docker/superset
+      dockerfile: Dockerfile
+      target: dev
+    container_name: superset
+    ports:
+      - "8088:8088"
+    env_file:
+      - ./docker/env/.env
+    volumes:
+      - ./data:/home/devuser/workspace
+      - ./docker/superset:/home/devuser/.superset
+    depends_on:
+      - mysql
+      - postgres
+      - redis
+    restart: always
+    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+    networks:
+      - superset_net
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    env_file:
+      - ./docker/env/.env
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+    networks:
+      - superset_net
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    env_file:
+      - ./docker/env/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - superset_net
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    env_file:
+      - ./docker/env/.env
+    restart: always
+    networks:
+      - superset_net
+
+volumes:
+  mysql_data:
+  postgres_data:
+
+networks:
+  superset_net:
+    driver: bridge

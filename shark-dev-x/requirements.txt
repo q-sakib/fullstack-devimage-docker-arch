@@ -1,0 +1,28 @@
+# requirements.txt
+
+# Runtime and extra deps
+celery>=5.3.6
+python-dotenv
+python-memcached
+python-graphql-client
+gunicorn
+
+# Data + Viz
+pandas>=2.0.0,<3.0
+numpy>=1.26.4,<1.27
+pyarrow
+pillow
+
+# Database drivers
+psycopg2-binary
+mysqlclient
+pymysql
+redis
+pymongo
+mongoengine
+
+# Forms & CORS
+WTForms>=3.0.0,<3.2
+flask-wtf
+flask-cors
+markupsafe>=2.1.0

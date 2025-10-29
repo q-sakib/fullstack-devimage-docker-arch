@@ -1,0 +1,31 @@
+# Ignore git metadata
+.git
+.gitignore
+
+# Ignore local environment files (optional, safer)
+.env
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Node/npm/yarn
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Dockerfile-related
+Dockerfile
+
+# IDE/editor config files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local logs and temp files
+*.log
+tmp/
+*.tmp

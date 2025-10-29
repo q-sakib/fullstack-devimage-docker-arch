@@ -1,0 +1,68 @@
+# ===================================================================
+# 🧪 ML/AI Development Image (Python + Jupyter + ML libraries)
+# Based on Debian-slim
+# ===================================================================
+
+FROM docker/base/debian-base AS ml
+
+LABEL maintainer="DevOps Toolkit <devops@local>"
+LABEL description="Python ML container with Jupyter, TensorFlow, PyTorch, Pandas, NumPy, etc."
+
+# -------------------------------------------------------------
+# 1️⃣ Shared scripts and environment
+# -------------------------------------------------------------
+COPY ../shared/user_setup.sh /tmp/user_setup.sh
+COPY ../shared/common_env.sh /tmp/common_env.sh
+COPY ../shared/zsh_aliases /tmp/zsh_aliases
+COPY ../shared/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+RUN chmod +x /tmp/user_setup.sh /usr/local/bin/entrypoint.sh \
+  && /tmp/user_setup.sh \
+  && echo "source /tmp/common_env.sh" >> ~/.zshrc \
+  && echo "source /tmp/zsh_aliases" >> ~/.zshrc
+
+USER root
+
+# -------------------------------------------------------------
+# 2️⃣ System dependencies
+# -------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential \
+  python3-dev \
+  python3-venv \
+  python3-pip \
+  curl \
+  wget \
+  git \
+  unzip \
+  libgl1-mesa-glx \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+USER devuser
+WORKDIR /home/devuser/ml
+
+# -------------------------------------------------------------
+# 3️⃣ Python virtual environment
+# -------------------------------------------------------------
+RUN python3 -m venv ml-env \
+  && ./ml-env/bin/pip install --upgrade pip setuptools wheel
+
+# -------------------------------------------------------------
+# 4️⃣ Copy ML requirements
+# -------------------------------------------------------------
+COPY requirements.txt .
+RUN ./ml-env/bin/pip install -r requirements.txt
+
+# -------------------------------------------------------------
+# 5️⃣ Jupyter Setup
+# -------------------------------------------------------------
+COPY jupyter_setup.sh /tmp/jupyter_setup.sh
+RUN chmod +x /tmp/jupyter_setup.sh && /tmp/jupyter_setup.sh
+
+# -------------------------------------------------------------
+# ✅ Expose ports and entrypoint
+# -------------------------------------------------------------
+EXPOSE 8888
+
+ENTRYPOINT ["entrypoint.sh"]
+CMD ["zsh"]
