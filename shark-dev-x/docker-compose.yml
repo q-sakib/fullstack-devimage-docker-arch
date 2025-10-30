@@ -14,10 +14,20 @@ services:
     volumes:
       - ./data:/home/devuser/workspace
       - ./docker/superset:/home/devuser/.superset
+      - cache_python:/home/devuser/.cache/python
+      - cache_node:/home/devuser/.cache/node
+      - cache_flutter:/home/devuser/.cache/flutter
+      - cache_ml_env:/home/devuser/.cache/ml-env
+      - cache_fullstack_env:/home/devuser/.cache/fullstack-env
+      - ./logs/superset:/home/devuser/logs/superset
+      - ./logs/celery:/home/devuser/logs/celery
     depends_on:
-      - mysql
-      - postgres
-      - redis
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: always
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
     networks:
@@ -28,41 +38,83 @@ services:
     container_name: mysql
     ports:
       - "3306:3306"
-    env_file:
-      - ./docker/env/.env
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_DATABASE: superset
+      MYSQL_USER: shark
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
     networks:
       - superset_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    secrets:
+      - mysql_root_password
+      - mysql_password
 
   postgres:
     image: postgres:15
     container_name: postgres
     ports:
       - "5432:5432"
-    env_file:
-      - ./docker/env/.env
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: shark
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
     networks:
       - superset_net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "shark"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    secrets:
+      - postgres_password
 
   redis:
     image: redis:latest
     container_name: redis
     ports:
       - "6379:6379"
-    env_file:
-      - ./docker/env/.env
+    environment:
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
     restart: always
     networks:
       - superset_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    secrets:
+      - redis_password
+
+secrets:
+  mysql_root_password:
+    file: ./docker/secrets/mysql_root_password.txt
+  mysql_password:
+    file: ./docker/secrets/mysql_password.txt
+  postgres_password:
+    file: ./docker/secrets/postgres_password.txt
+  redis_password:
+    file: ./docker/secrets/redis_password.txt
 
 volumes:
   mysql_data:
   postgres_data:
+  cache_python:
+  cache_node:
+  cache_flutter:
+  cache_ml_env:
+  cache_fullstack_env:
 
 networks:
   superset_net:

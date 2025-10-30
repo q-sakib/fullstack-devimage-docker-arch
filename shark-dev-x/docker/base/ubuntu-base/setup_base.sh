@@ -1,18 +1,12 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+echo "🔧 Setting up Ubuntu base image..."
 
-echo "🔧 Running base setup for Ubuntu..."
+# Upgrade Python tooling
+python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel virtualenv
 
-# Upgrade pip & install global python helpers
-sudo python3 -m pip install --upgrade pip setuptools wheel virtualenv
+# Basic convenience tools
+pip install --no-cache-dir ipython rich httpie
 
-# Configure zsh for the user
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
-  echo "🌀 Installing oh-my-zsh..."
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-fi
-
-# Setup zsh as default shell
-chsh -s $(which zsh)
-
-echo "✅ Ubuntu base setup complete."
+# Install Oh My Zsh + Plugins handled by user_setup.sh, no duplication here
+echo "✅ Ubuntu base system setup complete."

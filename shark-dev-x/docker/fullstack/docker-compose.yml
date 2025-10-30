@@ -1,0 +1,32 @@
+services:
+  fullstack:
+    build:
+      context: ./docker/fullstack
+      dockerfile: Dockerfile
+    env_file:
+      - ./env/.env
+    volumes:
+      - ./workspace:/home/devuser/workspace
+      - ./env/.env:/env/.env:ro
+    ports:
+      - "8000:8000"
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+    command: zsh
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: appdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+
+volumes:
+  pgdata:

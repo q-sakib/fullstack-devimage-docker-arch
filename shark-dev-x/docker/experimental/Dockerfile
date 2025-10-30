@@ -1,13 +1,17 @@
 # ===================================================================
 # 🧪 Experimental / Tools Container
-# Ubuntu Base
-# Includes Docker CLI, Docker Compose, AWS CLI, kubectl, etc.
+# Ubuntu Base + DevOps CLIs + SDKs
 # ===================================================================
 
 FROM docker/base/ubuntu-base AS experimental
 
 LABEL maintainer="DevOps Toolkit <devops@local>"
 LABEL description="Experimental tools container for CLIs, SDKs, and utilities"
+
+ARG INCLUDE_TERRAFORM=true
+ARG INCLUDE_GCLOUD=true
+ARG INCLUDE_AZURE=true
+ARG INCLUDE_GITHUB_CLI=true
 
 # -------------------------------------------------------------
 # 1️⃣ Shared scripts
@@ -27,20 +31,32 @@ RUN chmod +x /tmp/user_setup.sh /usr/local/bin/entrypoint.sh \
 # -------------------------------------------------------------
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  curl wget unzip git sudo zsh apt-transport-https ca-certificates gnupg lsb-release \
+  curl wget unzip git sudo zsh apt-transport-https ca-certificates gnupg lsb-release jq \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 USER devuser
 WORKDIR /home/devuser/experimental
 
 # -------------------------------------------------------------
-# 3️⃣ Copy experimental tools setup script
+# 3️⃣ Copy configuration + setup scripts
 # -------------------------------------------------------------
+COPY config/ config/
 COPY extra_tools.sh /tmp/extra_tools.sh
-RUN chmod +x /tmp/extra_tools.sh && /tmp/extra_tools.sh
+COPY plugins/ plugins/
+
+RUN chmod +x /tmp/extra_tools.sh plugins/*.sh \
+  && /tmp/extra_tools.sh
 
 # -------------------------------------------------------------
-# 4️⃣ Entrypoint
+# 4️⃣ Optional Plugin Installs
+# -------------------------------------------------------------
+RUN if [ "$INCLUDE_TERRAFORM" = "true" ]; then bash plugins/terraform_setup.sh; fi
+RUN if [ "$INCLUDE_GCLOUD" = "true" ]; then bash plugins/gcloud_setup.sh; fi
+RUN if [ "$INCLUDE_AZURE" = "true" ]; then bash plugins/azure_setup.sh; fi
+RUN if [ "$INCLUDE_GITHUB_CLI" = "true" ]; then bash plugins/github_cli_setup.sh; fi
+
+# -------------------------------------------------------------
+# ✅ Entrypoint
 # -------------------------------------------------------------
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["zsh"]

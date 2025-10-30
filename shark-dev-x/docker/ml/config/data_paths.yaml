@@ -1,0 +1,3 @@
+data: /home/devuser/ml/data
+models: /home/devuser/ml/models
+notebooks: /home/devuser/ml/notebooks

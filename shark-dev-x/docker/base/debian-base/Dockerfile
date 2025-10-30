@@ -1,57 +1,29 @@
-# ===============================================================
-# 📦 Debian Base Image
-# Lean, consistent dev environment for all builds
-# ===============================================================
-
 FROM debian:bookworm-slim
 
 LABEL maintainer="DevOps Team <devops@yourdomain.com>"
 ENV DEBIAN_FRONTEND=noninteractive
 
-# ---------------------------------------------------------------
-# 🧰 Install core dependencies
-# ---------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  sudo \
-  curl \
-  wget \
-  git \
-  zsh \
-  vim \
-  nano \
-  locales \
-  python3 \
-  python3-pip \
-  python3-venv \
-  ca-certificates \
-  netcat-openbsd \
+  sudo curl wget git zsh vim nano locales ca-certificates \
+  python3 python3-pip python3-venv python3-dev build-essential \
+  unzip zip netcat-openbsd gnupg \
   && rm -rf /var/lib/apt/lists/*
 
-# ---------------------------------------------------------------
-# 🌍 Locale & Python setup
-# ---------------------------------------------------------------
 RUN locale-gen en_US.UTF-8
-ENV LANG=en_US.UTF-8
-ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
-# ---------------------------------------------------------------
-# 👤 Create a non-root user
-# ---------------------------------------------------------------
-ARG USERNAME=devuser
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
+COPY ../../shared /opt/docker-shared
+COPY setup_base.sh /opt/setup_base.sh
+RUN chmod +x /opt/setup_base.sh && bash /opt/setup_base.sh
 
-RUN groupadd --gid $USER_GID $USERNAME \
-  && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /usr/bin/zsh \
-  && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
+ARG DEV_USER=devuser
+ARG DEV_UID=1000
+ARG DEV_GID=1000
+ENV DEV_USER=${DEV_USER} DEV_UID=${DEV_UID} DEV_GID=${DEV_GID}
 
-# ---------------------------------------------------------------
-# 🛠️ Copy setup scripts
-# ---------------------------------------------------------------
-COPY setup_base.sh /tmp/setup_base.sh
-RUN chmod +x /tmp/setup_base.sh && /tmp/setup_base.sh
+RUN /opt/docker-shared/user_setup.sh /opt/docker-shared
 
-USER $USERNAME
-WORKDIR /home/$USERNAME
-
+USER ${DEV_USER}
+WORKDIR /home/${DEV_USER}
+ENTRYPOINT ["/opt/docker-shared/entrypoint.sh"]
 CMD ["zsh"]

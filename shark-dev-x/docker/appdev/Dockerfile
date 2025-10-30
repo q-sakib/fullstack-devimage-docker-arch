@@ -1,76 +1,57 @@
-# ===================================================================
-# 🐧 AppDev Base (Ubuntu)
+# ===============================================================
+# 🐧 AppDev Image (Ubuntu)
 # Flutter + Android SDK + Node (NVM)
-# ===================================================================
+# ===============================================================
 
-FROM docker/base/ubuntu-base AS appdev
+FROM docker/base/ubuntu-base:latest AS appdev
 
-LABEL maintainer="DevOps Toolkit <devops@local>"
+LABEL maintainer="DevOps Toolkit <devops@yourdomain.com>"
 LABEL description="Unified AppDev image with Flutter, Android SDK, and Node.js LTS"
 
-# Set environment
-ENV DEBIAN_FRONTEND=noninteractive \
-  ANDROID_HOME=/opt/android-sdk \
-  PATH=$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/flutter/bin:/home/devuser/.nvm/versions/node/v*/bin
-
-WORKDIR /home/devuser
-
-# -------------------------------------------------------------
-# 1️⃣ Shared Scripts and Base Environment
-# -------------------------------------------------------------
-COPY ../shared/user_setup.sh /tmp/user_setup.sh
-COPY ../shared/common_env.sh /tmp/common_env.sh
-COPY ../shared/zsh_aliases /tmp/zsh_aliases
-COPY ../shared/entrypoint.sh /usr/local/bin/entrypoint.sh
-
-RUN chmod +x /tmp/user_setup.sh /usr/local/bin/entrypoint.sh \
-  && /tmp/user_setup.sh \
-  && echo "source /tmp/common_env.sh" >> ~/.zshrc \
-  && echo "source /tmp/zsh_aliases" >> ~/.zshrc
-
-# -------------------------------------------------------------
-# 2️⃣ Install System Dependencies
-# -------------------------------------------------------------
 USER root
+WORKDIR /opt
+
+ENV ANDROID_HOME=/opt/android-sdk \
+    FLUTTER_HOME=/opt/flutter \
+    NVM_DIR=/home/devuser/.nvm \
+    PATH=$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/flutter/bin:/home/devuser/.nvm/versions/node/v*/bin
+
+# -------------------------------------------------------------
+# 🧰 Install Required System Packages
+# -------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  openjdk-17-jdk wget unzip xz-utils curl git sudo zsh zip libglu1-mesa \
+    openjdk-17-jdk wget unzip xz-utils curl git zip libglu1-mesa \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# -------------------------------------------------------------
+# 🧩 Copy setup scripts (modular)
+# -------------------------------------------------------------
+COPY flutter_setup.sh /opt/setup/flutter_setup.sh
+COPY node_setup.sh /opt/setup/node_setup.sh
+COPY android_setup.sh /opt/setup/android_setup.sh
+COPY sdkmanager_config.sh /opt/setup/sdkmanager_config.sh
+RUN chmod +x /opt/setup/sdkmanager_config.sh && /opt/setup/sdkmanager_config.sh
+
+RUN chmod +x /opt/setup/*.sh
+
+# -------------------------------------------------------------
+# 🧱 Layered Setup (cached by stage)
+# -------------------------------------------------------------
 USER devuser
 WORKDIR /home/devuser
 
-# -------------------------------------------------------------
-# 3️⃣ Flutter SDK Installation
-# -------------------------------------------------------------
-COPY flutter_setup.sh /tmp/flutter_setup.sh
-RUN chmod +x /tmp/flutter_setup.sh && /tmp/flutter_setup.sh
+RUN /opt/setup/flutter_setup.sh && \
+    /opt/setup/node_setup.sh
+
+USER root
+RUN /opt/setup/android_setup.sh
+
+USER devuser
 
 # -------------------------------------------------------------
-# 4️⃣ Node + NVM Installation
+# 🧩 Validate Flutter & SDKs
 # -------------------------------------------------------------
-COPY node_setup.sh /tmp/node_setup.sh
-RUN chmod +x /tmp/node_setup.sh && /tmp/node_setup.sh
+RUN flutter doctor -v || true && node -v && java -version
 
-# -------------------------------------------------------------
-# 5️⃣ Android SDK Installation
-# -------------------------------------------------------------
-RUN sudo mkdir -p $ANDROID_HOME/cmdline-tools && \
-  wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip && \
-  sudo unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools && \
-  sudo mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest && \
-  sudo chown -R devuser:devuser $ANDROID_HOME && \
-  rm /tmp/cmdline-tools.zip
-
-# -------------------------------------------------------------
-# 6️⃣ Android SDK Manager Setup
-# -------------------------------------------------------------
-RUN yes | sdkmanager --licenses || true && \
-  sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest"
-
-# -------------------------------------------------------------
-# ✅ Final Setup
-# -------------------------------------------------------------
-RUN flutter doctor -v || true
-
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["/opt/docker-shared/entrypoint.sh"]
 CMD ["zsh"]

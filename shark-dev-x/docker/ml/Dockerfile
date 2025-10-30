@@ -27,15 +27,8 @@ USER root
 # 2️⃣ System dependencies
 # -------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  build-essential \
-  python3-dev \
-  python3-venv \
-  python3-pip \
-  curl \
-  wget \
-  git \
-  unzip \
-  libgl1-mesa-glx \
+  build-essential python3-dev python3-venv python3-pip \
+  curl wget git unzip libgl1-mesa-glx libjpeg-dev zlib1g-dev \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 USER devuser
@@ -48,7 +41,7 @@ RUN python3 -m venv ml-env \
   && ./ml-env/bin/pip install --upgrade pip setuptools wheel
 
 # -------------------------------------------------------------
-# 4️⃣ Copy ML requirements
+# 4️⃣ ML Requirements
 # -------------------------------------------------------------
 COPY requirements.txt .
 RUN ./ml-env/bin/pip install -r requirements.txt
@@ -60,7 +53,12 @@ COPY jupyter_setup.sh /tmp/jupyter_setup.sh
 RUN chmod +x /tmp/jupyter_setup.sh && /tmp/jupyter_setup.sh
 
 # -------------------------------------------------------------
-# ✅ Expose ports and entrypoint
+# 6️⃣ Copy config files
+# -------------------------------------------------------------
+COPY config/ config/
+
+# -------------------------------------------------------------
+# ✅ Ports & Entrypoint
 # -------------------------------------------------------------
 EXPOSE 8888
 

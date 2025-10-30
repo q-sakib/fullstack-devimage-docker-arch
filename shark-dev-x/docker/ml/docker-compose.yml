@@ -1,0 +1,13 @@
+services:
+  ml:
+    build:
+      context: ./docker/ml
+      dockerfile: Dockerfile
+    env_file:
+      - ./env/.env
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./workspace:/home/devuser/ml
+      - ./env/.env:/env/.env:ro
+    command: jupyter notebook --config=/home/devuser/ml/config/jupyter_notebook_config.py
