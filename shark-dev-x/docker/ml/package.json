@@ -1,0 +1,10 @@
+{
+  "name": "ml",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "python app.py",
+    "test": "pytest"
+  },
+  "dependencies": {}
+}

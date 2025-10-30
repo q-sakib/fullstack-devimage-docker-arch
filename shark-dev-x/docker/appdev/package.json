@@ -1,0 +1,10 @@
+{
+  "name": "appdev",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "flutter run -d web-server",
+    "build": "flutter build web"
+  },
+  "dependencies": {}
+}

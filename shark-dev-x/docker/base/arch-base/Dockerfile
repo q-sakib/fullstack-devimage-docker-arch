@@ -1,22 +1,20 @@
 FROM archlinux:latest
 
-LABEL maintainer="DevOps Team <devops@yourdomain.com>"
+LABEL maintainer="Shark X 404 <que.sakib@outlook.com>"
 
-# ---------------------------------------------------------------
-# 🧰 Core Packages
-# ---------------------------------------------------------------
+# Core packages
 RUN pacman -Syu --noconfirm && \
-  pacman -S --noconfirm \
-  sudo zsh git curl wget vim nano python python-pip \
-  base-devel unzip zip which netcat && \
-  pacman -Scc --noconfirm && rm -rf /var/cache/pacman/pkg/*
+    pacman -S --noconfirm sudo zsh git curl wget vim nano python python-pip \
+    base-devel unzip zip which netcat && \
+    pacman -Scc --noconfirm && rm -rf /var/cache/pacman/pkg/*
 
-# ---------------------------------------------------------------
-# 🧱 Copy Shared Scripts
-# ---------------------------------------------------------------
-COPY ../../shared /opt/docker-shared
-COPY setup_base.sh /opt/setup_base.sh
+# Shared scripts
+COPY docker/shared /opt/docker-shared
+COPY docker/base/arch-base/setup_base.sh /opt/setup_base.sh
+
 RUN chmod +x /opt/setup_base.sh && bash /opt/setup_base.sh
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 ARG DEV_USER=devuser
 ARG DEV_UID=1000

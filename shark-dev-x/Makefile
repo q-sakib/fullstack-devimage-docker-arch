@@ -2,7 +2,8 @@
 # Variables
 # ===============================
 COMPOSE=docker-compose -f docker-compose.yml
-SERVICES=fullstack appdev ml superset experimental
+SERVICES=fullstack appdev ml superset experimental mysql postgres redis
+PROFILE?=dev  # default profile: dev
 
 # ===============================
 # Build all or specific services
@@ -10,13 +11,28 @@ SERVICES=fullstack appdev ml superset experimental
 build: $(SERVICES)
 
 $(SERVICES):
-	$(COMPOSE) build $@
+	@echo "🔧 Building service: $@ (profile: $(PROFILE))"
+	$(COMPOSE) build --build-arg PROFILE=$(PROFILE) $@
 
 # ===============================
 # Start all services (dev)
 # ===============================
 up:
+	@echo "🚀 Starting all services (profile: $(PROFILE))"
 	$(COMPOSE) up -d
+
+# Start selected profile services
+up-profile:
+	@echo "🚀 Starting profile: $(PROFILE)"
+ifeq ($(PROFILE), dev)
+	$(COMPOSE) up -d fullstack ml superset
+endif
+ifeq ($(PROFILE), analytics)
+	$(COMPOSE) up -d superset ml
+endif
+ifeq ($(PROFILE), admin)
+	$(COMPOSE) up -d super-admin-all
+endif
 
 # ===============================
 # Stop all services
@@ -42,6 +58,9 @@ up-prod:
 # ===============================
 logs:
 	$(COMPOSE) logs -f
+
+logs-%:
+	$(COMPOSE) logs -f $*
 
 # ===============================
 # Run tests (requires test suites)
@@ -92,4 +111,22 @@ ci-test:
 	$(COMPOSE) run --rm ml pytest
 
 ci-deploy:
-	$(COMPOSE) up -d --build
+	$(COMPOSE) up -d --build --remove-orphans
+
+# ===============================
+# Secrets Management (example)
+# ===============================
+setup-secrets:
+	@echo "🔐 Creating Docker secrets for prod"
+	@mkdir -p docker/secrets
+	@echo "$${MYSQL_ROOT_PASSWORD:-sharkX404}" > docker/secrets/mysql_root_password.txt
+	@echo "$${MYSQL_PASSWORD:-sharkX404}" > docker/secrets/mysql_password.txt
+	@echo "$${POSTGRES_PASSWORD:-sharkX404}" > docker/secrets/postgres_password.txt
+	@echo "$${REDIS_PASSWORD:-sharkX404}" > docker/secrets/redis_password.txt
+	@echo "✅ Secrets created"
+
+# ===============================
+# Quick start: full setup
+# ===============================
+init: common-install setup-cache post-create build up
+	@echo "🚀 All services built and running!"

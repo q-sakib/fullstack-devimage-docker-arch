@@ -1,62 +1,92 @@
-# docker/superset/Dockerfile
+# ===============================
+# Superset Dockerfile (Isolated venv, optimized runtime)
+# ===============================
 ARG DEV_USER=devuser
 ARG DEV_UID=1000
 ARG DEV_GID=1000
 ARG MODE=dev        # dev or prod
 
-# ---------- Builder ----------
-FROM docker/base/ubuntu-base AS builder
+# ---------- Base ----------
+FROM docker/base/ubuntu-base AS base
 WORKDIR /opt/superset
 
 USER root
+# Only install runtime dependencies (minimal)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  build-essential libssl-dev libffi-dev python3-dev default-libmysqlclient-dev \
-  libpq-dev libsasl2-dev libldap2-dev netcat-openbsd procps \
-  && rm -rf /var/lib/apt/lists/*
+  libpq-dev \
+  libssl-dev \
+  libffi-dev \
+  libsasl2-dev \
+  libldap2-dev \
+  libjpeg-dev \
+  zlib1g-dev \
+  netcat-openbsd \
+  procps \
+  curl \
+  git \
+  && rm -rf /var/lib/apt/lists/* \
+  && echo "✅ Base runtime dependencies installed"
 
-COPY requirements.txt constraints.txt ./
-COPY superset_config.py entrypoint.sh zsh_aliases ./
+# ---------- Builder ----------
+FROM base AS builder
+WORKDIR /opt/superset
 
-RUN python3 -m venv /opt/superset-venv \
-  && /opt/superset-venv/bin/pip install --upgrade pip setuptools wheel \
-  && if [ -f constraints.txt ]; then \
-  /opt/superset-venv/bin/pip install --no-cache-dir -r requirements.txt --constraint constraints.txt ; \
-  else \
-  /opt/superset-venv/bin/pip install --no-cache-dir -r requirements.txt ; \
-  fi
+# Install build dependencies for Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential \
+  python3-dev \
+  default-libmysqlclient-dev \
+  pkg-config \
+  && rm -rf /var/lib/apt/lists/* \
+  && echo "✅ Build dependencies installed"
 
+# Copy Superset files
+COPY requirements.txt superset_config.py entrypoint.sh ./
+
+# Create isolated virtual environment
+RUN python3 -m venv /home/${DEV_USER}/.superset-venv \
+  && echo "✅ Virtual environment created"
+
+# Upgrade pip/setuptools/wheel
+RUN /home/${DEV_USER}/.superset-venv/bin/pip install --upgrade pip setuptools wheel \
+  && echo "✅ pip/setuptools/wheel upgraded"
+
+# Install Superset and additional requirements
+# Install Superset, mysqlclient, and additional requirements
+RUN /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir apache-superset \
+  && /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir mysqlclient \
+  && if [ -f requirements.txt ]; then \
+  /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir -r requirements.txt ; \
+  fi \
+  && echo "✅ Superset + requirements installed"
+
+
+# Make entrypoint executable
 RUN chmod +x entrypoint.sh
 
 # ---------- Runtime ----------
-FROM docker/base/ubuntu-base AS runtime
+FROM base AS runtime
 WORKDIR /home/${DEV_USER}/superset
 
-# Copy venv and scripts from builder
-COPY --from=builder /opt/superset-venv /opt/superset-venv
-COPY --from=builder /opt/entrypoint.sh /opt/entrypoint.sh
-COPY --from=builder /opt/zsh_aliases /opt/zsh_aliases
+# Copy isolated venv and Superset files from builder
+COPY --from=builder /home/${DEV_USER}/.superset-venv /home/${DEV_USER}/.superset-venv
+COPY --from=builder /opt/superset/entrypoint.sh /opt/entrypoint.sh
 COPY superset_config.py /home/${DEV_USER}/superset_config.py
 
-# Copy shared scripts
-COPY ../shared /opt/docker-shared
-RUN chmod -R a+rx /opt/docker-shared /opt/entrypoint.sh /opt/zsh_aliases
+RUN echo "✅ Runtime files copied"
 
-# Expose Superset
+# Expose Superset port
 EXPOSE 8088
 
-# Set environment
-ENV PATH="/opt/superset-venv/bin:${PATH}" \
+# Set environment variables for isolated venv
+ENV PATH="/home/${DEV_USER}/.superset-venv/bin:$PATH" \
   SUPERSET_HOME=/home/${DEV_USER}/superset \
   MODE=${MODE} \
   HOME=/home/${DEV_USER}
 
-# Setup profile.d for all shells
-RUN printf "%s\n" "source /opt/docker-shared/common_env.sh 2>/dev/null || true" > /etc/profile.d/00-docker-shared.sh \
-  && printf "%s\n" "source /opt/zsh_aliases 2>/dev/null || true" > /etc/profile.d/01-superset-aliases.sh \
-  && chmod a+r /etc/profile.d/00-docker-shared.sh /etc/profile.d/01-superset-aliases.sh
-
-# Ensure runtime user
-RUN /opt/docker-shared/user_setup.sh || true
+# Ensure runtime user exists
+RUN /opt/docker-shared/user_setup.sh || true \
+  && echo "✅ Runtime user setup completed"
 
 USER ${DEV_USER}
 WORKDIR /home/${DEV_USER}

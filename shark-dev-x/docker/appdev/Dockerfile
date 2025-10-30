@@ -1,5 +1,5 @@
 # ===============================================================
-# 🐧 AppDev Image (Ubuntu)
+# 🐧 AppDev Image (Ubuntu) with success messages
 # Flutter + Android SDK + Node (NVM)
 # ===============================================================
 
@@ -21,7 +21,8 @@ ENV ANDROID_HOME=/opt/android-sdk \
 # -------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jdk wget unzip xz-utils curl git zip libglu1-mesa \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && echo "✅ System packages installed"
 
 # -------------------------------------------------------------
 # 🧩 Copy setup scripts (modular)
@@ -30,9 +31,10 @@ COPY flutter_setup.sh /opt/setup/flutter_setup.sh
 COPY node_setup.sh /opt/setup/node_setup.sh
 COPY android_setup.sh /opt/setup/android_setup.sh
 COPY sdkmanager_config.sh /opt/setup/sdkmanager_config.sh
-RUN chmod +x /opt/setup/sdkmanager_config.sh && /opt/setup/sdkmanager_config.sh
 
-RUN chmod +x /opt/setup/*.sh
+RUN chmod +x /opt/setup/*.sh \
+    && /opt/setup/sdkmanager_config.sh \
+    && echo "✅ Setup scripts copied and sdkmanager configured"
 
 # -------------------------------------------------------------
 # 🧱 Layered Setup (cached by stage)
@@ -40,18 +42,27 @@ RUN chmod +x /opt/setup/*.sh
 USER devuser
 WORKDIR /home/devuser
 
-RUN /opt/setup/flutter_setup.sh && \
-    /opt/setup/node_setup.sh
+RUN /opt/setup/flutter_setup.sh \
+    && echo "✅ Flutter setup completed" \
+    && /opt/setup/node_setup.sh \
+    && echo "✅ Node.js setup completed"
 
 USER root
-RUN /opt/setup/android_setup.sh
+RUN /opt/setup/android_setup.sh \
+    && echo "✅ Android SDK setup completed"
 
 USER devuser
 
 # -------------------------------------------------------------
 # 🧩 Validate Flutter & SDKs
 # -------------------------------------------------------------
-RUN flutter doctor -v || true && node -v && java -version
+RUN flutter doctor -v || true \
+    && node -v \
+    && java -version \
+    && echo "✅ Flutter, Node.js, Java validated"
 
+# -------------------------------------------------------------
+# ✅ Entrypoint & CMD
+# -------------------------------------------------------------
 ENTRYPOINT ["/opt/docker-shared/entrypoint.sh"]
 CMD ["zsh"]

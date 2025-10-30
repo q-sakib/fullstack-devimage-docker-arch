@@ -1,26 +1,34 @@
-version: "3.8"
+version: "3.9"
 
 services:
-  superset:
+
+  # -----------------------------
+  # Super Admin All (Universal)
+  # Combines Superset, Fullstack, ML, AppDev, Experimental
+  # -----------------------------
+  super-admin-all:
     build:
-      context: ./docker/superset
+      context: .
       dockerfile: Dockerfile
-      target: dev
-    container_name: superset
-    ports:
-      - "8088:8088"
+      target: super-admin-all
+    container_name: super-admin-all
     env_file:
       - ./docker/env/.env
+    profiles:
+      - admin
+    ports:
+      - "8088:8088"   # Superset
+      - "5000:5000"   # ML API
+      - "3000:3000"   # Fullstack / AppDev
     volumes:
       - ./data:/home/devuser/workspace
-      - ./docker/superset:/home/devuser/.superset
       - cache_python:/home/devuser/.cache/python
       - cache_node:/home/devuser/.cache/node
       - cache_flutter:/home/devuser/.cache/flutter
       - cache_ml_env:/home/devuser/.cache/ml-env
       - cache_fullstack_env:/home/devuser/.cache/fullstack-env
-      - ./logs/superset:/home/devuser/logs/superset
-      - ./logs/celery:/home/devuser/logs/celery
+      - ./logs:/home/devuser/logs
+      - /var/run/docker.sock:/var/run/docker.sock # docker-in-docker for admin
     depends_on:
       mysql:
         condition: service_healthy
@@ -29,10 +37,168 @@ services:
       redis:
         condition: service_healthy
     restart: always
-    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"] 
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
-      - superset_net
+      - dev_net
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
 
+  # -----------------------------
+  # Superset
+  # -----------------------------
+  superset:
+    build:
+      context: ./docker/superset
+      dockerfile: Dockerfile
+      target: superset
+    container_name: superset
+    env_file:
+      - ./docker/env/.env
+    profiles:
+      - analytics
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./data:/home/devuser/workspace
+      - cache_python:/home/devuser/.cache/python
+      - cache_ml_env:/home/devuser/.cache/ml-env
+      - ./logs/superset:/home/devuser/logs/superset
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dev_net
+
+  # -----------------------------
+  # Fullstack Dev Container
+  # -----------------------------
+  fullstack:
+    build:
+      context: ./docker/fullstack
+      dockerfile: Dockerfile
+      target: fullstack
+    container_name: fullstack
+    env_file:
+      - ./docker/env/.env
+    profiles:
+      - dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/home/devuser/workspace
+      - cache_fullstack_env:/home/devuser/.cache/fullstack-env
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"] 
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dev_net
+
+  # -----------------------------
+  # ML / AI Container
+  # -----------------------------
+  ml:
+    build:
+      context: ./docker/ml
+      dockerfile: Dockerfile
+      target: ml
+    container_name: ml
+    env_file:
+      - ./docker/env/.env
+    profiles:
+      - dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/home/devuser/workspace
+      - cache_ml_env:/home/devuser/.cache/ml-env
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dev_net
+
+  # -----------------------------
+  # AppDev (Flutter / Web)
+  # -----------------------------
+  appdev:
+    build:
+      context: ./docker/appdev
+      dockerfile: Dockerfile
+      target: appdev
+    container_name: appdev
+    env_file:
+      - ./docker/env/.env
+    profiles:
+      - dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/home/devuser/workspace
+      - cache_flutter:/home/devuser/.cache/flutter
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dev_net
+
+  # -----------------------------
+  # Experimental / Optional
+  # -----------------------------
+  experimental:
+    build:
+      context: ./docker/experimental
+      dockerfile: Dockerfile
+      target: experimental
+    container_name: experimental
+    env_file:
+      - ./docker/env/.env
+    profiles:
+      - dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./data:/home/devuser/workspace
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dev_net
+
+  # -----------------------------
+  # MySQL Database
+  # -----------------------------
   mysql:
     image: mysql:8.0
     container_name: mysql
@@ -46,17 +212,22 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
-    networks:
-      - superset_net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - dev_net
     secrets:
       - mysql_root_password
       - mysql_password
+    profiles:
+      - admin
 
+  # -----------------------------
+  # PostgreSQL Database
+  # -----------------------------
   postgres:
     image: postgres:15
     container_name: postgres
@@ -69,16 +240,21 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
-    networks:
-      - superset_net
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "shark"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - dev_net
     secrets:
       - postgres_password
+    profiles:
+      - admin
 
+  # -----------------------------
+  # Redis Cache
+  # -----------------------------
   redis:
     image: redis:latest
     container_name: redis
@@ -87,16 +263,21 @@ services:
     environment:
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
     restart: always
-    networks:
-      - superset_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - dev_net
     secrets:
       - redis_password
+    profiles:
+      - admin
 
+# -----------------------------
+# Docker Secrets
+# -----------------------------
 secrets:
   mysql_root_password:
     file: ./docker/secrets/mysql_root_password.txt
@@ -107,6 +288,9 @@ secrets:
   redis_password:
     file: ./docker/secrets/redis_password.txt
 
+# -----------------------------
+# Volumes for persistence & caches
+# -----------------------------
 volumes:
   mysql_data:
   postgres_data:
@@ -116,6 +300,9 @@ volumes:
   cache_ml_env:
   cache_fullstack_env:
 
+# -----------------------------
+# Networks
+# -----------------------------
 networks:
-  superset_net:
+  dev_net:
     driver: bridge

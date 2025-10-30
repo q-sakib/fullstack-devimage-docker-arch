@@ -1,5 +1,5 @@
 # ===================================================================
-# 🌐 Fullstack Dev Container
+# 🌐 Fullstack Dev Container (with build success messages)
 # Python + Node.js + DB Clients
 # Arch Base
 # ===================================================================
@@ -19,6 +19,7 @@ COPY ../shared/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /tmp/user_setup.sh /usr/local/bin/entrypoint.sh \
   && /tmp/user_setup.sh \
+  && echo "✅ Shared scripts setup completed" \
   && echo "source /tmp/common_env.sh" >> ~/.zshrc \
   && echo "source /tmp/zsh_aliases" >> ~/.zshrc
 
@@ -32,7 +33,8 @@ RUN pacman -Syu --noconfirm \
   git vim curl wget unzip sudo \
   mariadb-libs postgresql-libs redis \
   && pacman -Scc --noconfirm \
-  && rm -rf /var/cache/pacman/pkg/*
+  && rm -rf /var/cache/pacman/pkg/* \
+  && echo "✅ System packages installed"
 
 USER devuser
 WORKDIR /home/devuser/fullstack
@@ -41,24 +43,29 @@ WORKDIR /home/devuser/fullstack
 # 3️⃣ Python virtual environment
 # -------------------------------------------------------------
 RUN python -m venv fullstack-env \
-  && ./fullstack-env/bin/pip install --upgrade pip setuptools wheel
+  && ./fullstack-env/bin/pip install --upgrade pip setuptools wheel \
+  && echo "✅ Python virtual environment created"
 
 # -------------------------------------------------------------
 # 4️⃣ Copy project requirements
 # -------------------------------------------------------------
 COPY requirements.txt .
-RUN ./fullstack-env/bin/pip install -r requirements.txt
+RUN ./fullstack-env/bin/pip install -r requirements.txt \
+  && echo "✅ Python requirements installed"
 
 # -------------------------------------------------------------
 # 5️⃣ Node environment setup
 # -------------------------------------------------------------
-RUN mkdir -p ~/.npm-global && npm config set prefix ~/.npm-global && \
-  export PATH=$HOME/.npm-global/bin:$PATH
+RUN mkdir -p ~/.npm-global \
+  && npm config set prefix ~/.npm-global \
+  && export PATH=$HOME/.npm-global/bin:$PATH \
+  && echo "✅ Node.js global prefix configured"
 
 # -------------------------------------------------------------
 # 6️⃣ Copy config folder (if exists)
 # -------------------------------------------------------------
 COPY config/ config/
+RUN echo "✅ Config folder copied"
 
 # -------------------------------------------------------------
 # 7️⃣ Entrypoint & Shell
