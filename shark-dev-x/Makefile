@@ -130,3 +130,11 @@ setup-secrets:
 # ===============================
 init: common-install setup-cache post-create build up
 	@echo "🚀 All services built and running!"
+
+
+.PHONY: update-shared build
+update-shared:
+    ./scripts/update_shared.sh
+
+build: update-shared
+    docker compose build --no-cache

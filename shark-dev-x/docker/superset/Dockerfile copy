@@ -1,0 +1,100 @@
+# ===============================
+# Superset Dockerfile (Isolated venv, optimized runtime)
+# ===============================
+ARG DEV_USER=devuser
+ARG DEV_UID=1000
+ARG DEV_GID=1000
+ARG MODE=dev        # dev or prod
+
+# ---------- Base ----------
+FROM docker/base/ubuntu-base AS base
+WORKDIR /opt/superset
+
+USER root
+# Only install runtime dependencies (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  libpq-dev \
+  libssl-dev \
+  libffi-dev \
+  libsasl2-dev \
+  libldap2-dev \
+  libjpeg-dev \
+  zlib1g-dev \
+  netcat-openbsd \
+  procps \
+  curl \
+  git \
+  default-libmysqlclient-dev \
+  libmysqlclient-dev \
+  pkg-config \
+  && rm -rf /var/lib/apt/lists/* \
+  && echo "✅ Base runtime + MySQL deps installed"
+
+
+# ---------- Builder ----------
+FROM base AS builder
+WORKDIR /opt/superset
+
+# Install build dependencies for Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential \
+  python3-dev \
+  default-libmysqlclient-dev \
+  libmysqlclient-dev \
+  pkg-config \
+  && rm -rf /var/lib/apt/lists/* \
+  && echo "✅ Build dependencies installed"
+
+# Copy Superset files
+COPY requirements.txt superset_config.py entrypoint.sh ./
+
+# Create isolated virtual environment
+RUN python3 -m venv /home/${DEV_USER}/.superset-venv \
+  && echo "✅ Virtual environment created"
+
+# Upgrade pip/setuptools/wheel
+RUN /home/${DEV_USER}/.superset-venv/bin/pip install --upgrade pip setuptools wheel \
+  && echo "✅ pip/setuptools/wheel upgraded"
+
+# Install Superset and additional requirements
+# Install Superset, mysqlclient, and additional requirements
+RUN /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir apache-superset \
+  && /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir mysqlclient \
+  && if [ -f requirements.txt ]; then \
+  /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir -r requirements.txt ; \
+  fi \
+  && echo "✅ Superset + requirements installed"
+
+
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
+
+# ---------- Runtime ----------
+FROM base AS runtime
+WORKDIR /home/${DEV_USER}/superset
+
+# Copy isolated venv and Superset files from builder
+COPY --from=builder /home/${DEV_USER}/.superset-venv /home/${DEV_USER}/.superset-venv
+COPY --from=builder /opt/superset/entrypoint.sh /opt/entrypoint.sh
+COPY superset_config.py /home/${DEV_USER}/superset_config.py
+
+RUN echo "✅ Runtime files copied"
+
+# Expose Superset port
+EXPOSE 8088
+
+# Set environment variables for isolated venv
+ENV PATH="/home/${DEV_USER}/.superset-venv/bin:$PATH" \
+  SUPERSET_HOME=/home/${DEV_USER}/superset \
+  MODE=${MODE} \
+  HOME=/home/${DEV_USER}
+
+# Ensure runtime user exists
+RUN /opt/docker-shared/user_setup.sh || true \
+  && echo "✅ Runtime user setup completed"
+
+USER ${DEV_USER}
+WORKDIR /home/${DEV_USER}
+
+ENTRYPOINT ["/opt/entrypoint.sh"]
+CMD ["shell"]

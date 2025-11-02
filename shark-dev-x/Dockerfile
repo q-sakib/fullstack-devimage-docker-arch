@@ -87,49 +87,61 @@ RUN [ -d ./shared ] || echo "⚠️ shared folder missing, skipping"
 RUN npm install || echo "⚠️ npm install failed, skipping"
 
 RUN echo "✅ Experimental stage completed"
+# =====================================================
+# ---------- Superset Embedded Block ----------
+# =====================================================
+ARG DEV_USER=devuser
+ARG DEV_UID=1000
+ARG DEV_GID=1000
+ARG MODE=prod
 
-# =====================================================
-# ---------- Superset ----------
-# =====================================================
-FROM ubuntu-base AS superset
 WORKDIR /opt/superset
 
 # Copy Superset files
-COPY docker/superset/requirements.txt .
-COPY docker/superset/superset_config.py .
-COPY docker/superset/entrypoint.sh .
+COPY docker/superset/requirements.txt docker/superset/superset_config.py docker/superset/entrypoint.sh ./
 
-# Create isolated venv
-RUN python3 -m venv /home/devuser/.superset-venv \
-  && echo "✅ Virtual environment created"
+# Switch to root to install system dependencies
+USER root
 
-# Upgrade pip/setuptools/wheel
-RUN /home/devuser/.superset-venv/bin/pip install --upgrade pip setuptools wheel \
-  && echo "✅ pip, setuptools, wheel upgraded"
+# Install build deps and runtime libs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential python3-dev pkg-config default-libmysqlclient-dev \
+  libssl-dev libffi-dev libjpeg-dev zlib1g-dev curl git netcat-openbsd \
+  && rm -rf /var/lib/apt/lists/* \
+  && echo "✅ System dependencies installed"
 
-# Install Apache Superset (latest)
-RUN /home/devuser/.superset-venv/bin/pip install --no-cache-dir apache-superset \
-  && echo "✅ Apache Superset latest installed"
+# Create isolated Python venv
+RUN python3 -m venv /home/${DEV_USER}/.superset-venv \
+  && /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
+  && echo "✅ Virtual environment created and upgraded"
 
-# Install additional requirements
-RUN if [ -f requirements.txt ]; then \
-  /home/devuser/.superset-venv/bin/pip install --no-cache-dir -r requirements.txt ; \
-  fi \
-  && echo "✅ Additional Python requirements installed"
+# Install Apache Superset + drivers + Celery/Redis + optional requirements
+RUN /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir \
+  "apache-superset[all,celery]" \
+  mysqlclient \
+  psycopg2-binary \
+  redis \
+  celery \
+  && if [ -f requirements.txt ]; then /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir -r requirements.txt; fi \
+  && echo "✅ Superset + additional Python requirements installed"
 
 # Make entrypoint executable
-RUN chmod +x entrypoint.sh \
-  && echo "✅ Entrypoint script permissions set"
+RUN chmod +x entrypoint.sh
 
-# Expose Superset service port
+# Set runtime environment variables
+ENV PATH="/home/${DEV_USER}/.superset-venv/bin:$PATH" \
+  SUPERSET_HOME=/home/${DEV_USER}/superset \
+  HOME=/home/${DEV_USER}
+
+# Switch to non-root runtime user
+USER ${DEV_USER}
+
+# Expose Superset port
 EXPOSE 8088
-ENV PATH="/home/devuser/.superset-venv/bin:$PATH" \
-  SUPERSET_HOME=/home/devuser/superset \
-  HOME=/home/devuser
-RUN echo "✅ Superset stage completed successfully"
 
-
-
+# Default entrypoint
+ENTRYPOINT ["/opt/superset/entrypoint.sh"]
+CMD ["superset"]
 
 # =====================================================
 # ---------- Final Root Image ----------
@@ -138,12 +150,12 @@ RUN echo "✅ Superset stage completed successfully"
 FROM ubuntu-base AS super-admin-all
 WORKDIR /home/devuser
 
-# Copy all stages individually, making them independent
+# Copy all stages individually
 COPY --from=fullstack /opt/fullstack /opt/fullstack
 COPY --from=ml /opt/ml /opt/ml
 COPY --from=appdev /opt/appdev /opt/appdev
 COPY --from=experimental /opt/experimental /opt/experimental
-COPY --from=superset /opt/superset /opt/superset
+COPY --from=local-superset /opt/superset /opt/superset
 
 # Mount shared scripts
 COPY docker/shared /opt/docker-shared
@@ -156,7 +168,7 @@ EXPOSE 8088 5000 3000 3001 4000
 ARG PROFILE=dev
 ENV PROFILE=${PROFILE}
 
-# Default entrypoint
+# Set default shell
 ENTRYPOINT ["/bin/bash"]
 CMD ["zsh"]
 

@@ -1,95 +1,84 @@
 # ===============================
-# Superset Dockerfile (Isolated venv, optimized runtime)
+# Superset Optimized Dockerfile
+# Multi-Stage + Isolated venv + Latest Superset + Enterprise Ready
 # ===============================
+
 ARG DEV_USER=devuser
 ARG DEV_UID=1000
 ARG DEV_GID=1000
-ARG MODE=dev        # dev or prod
+ARG MODE=prod  # dev | prod
+ARG PYTHON_VERSION=3.10
 
-# ---------- Base ----------
+# ---------- Base OS Layer ----------
 FROM docker/base/ubuntu-base AS base
 WORKDIR /opt/superset
-
 USER root
-# Only install runtime dependencies (minimal)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  libpq-dev \
-  libssl-dev \
-  libffi-dev \
-  libsasl2-dev \
-  libldap2-dev \
-  libjpeg-dev \
-  zlib1g-dev \
-  netcat-openbsd \
-  procps \
-  curl \
-  git \
-  && rm -rf /var/lib/apt/lists/* \
-  && echo "✅ Base runtime dependencies installed"
 
-# ---------- Builder ----------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  libpq-dev libssl-dev libffi-dev libsasl2-dev \
+  libldap2-dev libjpeg-dev zlib1g-dev \
+  curl git netcat-openbsd procps \
+  && rm -rf /var/lib/apt/lists/* \
+  && echo "✅ Superset base runtime deps installed"
+
+# ---------- Builder Layer ----------
 FROM base AS builder
 WORKDIR /opt/superset
 
-# Install build dependencies for Python packages
+# Build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  build-essential \
-  python3-dev \
+  build-essential python3-dev pkg-config \
   default-libmysqlclient-dev \
-  pkg-config \
+  libbz2-dev liblzma-dev \
   && rm -rf /var/lib/apt/lists/* \
-  && echo "✅ Build dependencies installed"
+  && echo "✅ Build toolchain installed"
 
-# Copy Superset files
-COPY requirements.txt superset_config.py entrypoint.sh ./
-
-# Create isolated virtual environment
+# Create Python venv
 RUN python3 -m venv /home/${DEV_USER}/.superset-venv \
-  && echo "✅ Virtual environment created"
+  && echo "✅ Python venv created"
 
-# Upgrade pip/setuptools/wheel
-RUN /home/${DEV_USER}/.superset-venv/bin/pip install --upgrade pip setuptools wheel \
-  && echo "✅ pip/setuptools/wheel upgraded"
+# Upgrade pip + setuptools + wheel
+RUN /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Install Superset and additional requirements
-# Install Superset, mysqlclient, and additional requirements
-RUN /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir apache-superset \
-  && /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir mysqlclient \
-  && if [ -f requirements.txt ]; then \
-  /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir -r requirements.txt ; \
-  fi \
-  && echo "✅ Superset + requirements installed"
+# Install latest Superset + extras for enterprise (async + Celery + Redis)
+RUN /home/${DEV_USER}/.superset-venv/bin/pip install --no-cache-dir \
+  "apache-superset[all,celery]" \
+  mysqlclient \
+  psycopg2-binary \
+  redis \
+  celery \
+  && echo "✅ Superset + DB drivers + Celery/Redis installed"
 
-
-# Make entrypoint executable
+# Copy config & entrypoint
+COPY entrypoint.sh superset_config.py ./
 RUN chmod +x entrypoint.sh
 
-# ---------- Runtime ----------
+# ---------- Runtime Layer ----------
 FROM base AS runtime
 WORKDIR /home/${DEV_USER}/superset
 
-# Copy isolated venv and Superset files from builder
+ENV HOME=/home/${DEV_USER} \
+  SUPERSET_HOME=/home/${DEV_USER}/superset \
+  PATH="/home/${DEV_USER}/.superset-venv/bin:$PATH" \
+  MODE=${MODE}
+
+# Create runtime user
+RUN /opt/docker-shared/user_setup.sh || true
+
+# Copy venv + Superset assets from builder
 COPY --from=builder /home/${DEV_USER}/.superset-venv /home/${DEV_USER}/.superset-venv
 COPY --from=builder /opt/superset/entrypoint.sh /opt/entrypoint.sh
-COPY superset_config.py /home/${DEV_USER}/superset_config.py
+COPY --from=builder /opt/superset/superset_config.py /home/${DEV_USER}/superset_config.py
 
-RUN echo "✅ Runtime files copied"
+RUN echo "✅ Runtime files ready"
 
-# Expose Superset port
-EXPOSE 8088
-
-# Set environment variables for isolated venv
-ENV PATH="/home/${DEV_USER}/.superset-venv/bin:$PATH" \
-  SUPERSET_HOME=/home/${DEV_USER}/superset \
-  MODE=${MODE} \
-  HOME=/home/${DEV_USER}
-
-# Ensure runtime user exists
-RUN /opt/docker-shared/user_setup.sh || true \
-  && echo "✅ Runtime user setup completed"
-
+# Switch to runtime user
 USER ${DEV_USER}
 WORKDIR /home/${DEV_USER}
 
+# Expose Superset service port
+EXPOSE 8088
+
+# Default entrypoint and command
 ENTRYPOINT ["/opt/entrypoint.sh"]
-CMD ["shell"]
+CMD ["superset", "run", "-p", "8088", "--with-threads", "--reload"]
