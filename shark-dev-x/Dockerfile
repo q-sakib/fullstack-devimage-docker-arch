@@ -1,13 +1,13 @@
 # =====================================================
 # ---------- Local Base Images ----------
 # =====================================================
-FROM local-base-debian AS debian-base
+FROM docker/base/debian-base AS debian-base
 # Debian base already configured
 
-FROM local-base-ubuntu AS ubuntu-base
+FROM docker/base/ubuntu-base AS ubuntu-base
 # Ubuntu base already configured
 
-FROM local-base-arch AS arch-base
+FROM docker/base/arch-base AS arch-base
 # Arch base already configured
 
 # =====================================================
@@ -16,11 +16,21 @@ FROM local-base-arch AS arch-base
 FROM ubuntu-base AS fullstack
 WORKDIR /opt/fullstack
 
-COPY docker/fullstack/package.json .
+# Copy update script first, then update shared folder
+COPY docker/scripts/update_shared.sh /tmp/update_shared.sh
+RUN chmod +x /tmp/update_shared.sh \
+  && /tmp/update_shared.sh fullstack || echo "⚠️ Shared folder update skipped"
+
+# Copy updated shared folder
+# Safe COPY that doesn’t fail if empty
+COPY docker/shared/. ./shared/
+RUN [ -d ./shared ] || echo "⚠️ Shared folder missing, skipping"
+
+
+COPY docker/fullstack/package.json . 
 # COPY docker/fullstack/package-lock.json .
 
-# Copy shared scripts
-COPY docker/shared ./shared
+# Verify shared folder exists
 RUN [ -d ./shared ] || echo "⚠️ shared folder missing, skipping"
 
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
@@ -36,11 +46,21 @@ RUN echo "✅ Fullstack stage completed"
 FROM ubuntu-base AS ml
 WORKDIR /opt/ml
 
+# Copy update script first, then update shared folder
+COPY docker/scripts/update_shared.sh /tmp/update_shared.sh
+RUN chmod +x /tmp/update_shared.sh \
+  && /tmp/update_shared.sh ml || echo "⚠️ Shared folder update skipped"
+
+# Copy updated shared folder
+# Safe COPY that doesn’t fail if empty
+COPY docker/shared/. ./shared/
+RUN [ -d ./shared ] || echo "⚠️ Shared folder missing, skipping"
+
+
 COPY docker/ml/requirements.txt .
 COPY docker/ml/package.json .
 
-# Copy shared scripts
-COPY docker/shared ./shared
+# Verify shared folder exists
 RUN [ -d ./shared ] || echo "⚠️ shared folder missing, skipping"
 
 RUN python3 -m venv /opt/ml-venv \
@@ -56,11 +76,21 @@ RUN echo "✅ ML stage completed"
 FROM ubuntu-base AS appdev
 WORKDIR /opt/appdev
 
-COPY docker/appdev/package.json .
+# Copy update script first, then update shared folder
+COPY docker/scripts/update_shared.sh /tmp/update_shared.sh
+RUN chmod +x /tmp/update_shared.sh \
+  && /tmp/update_shared.sh appdev || echo "⚠️ Shared folder update skipped"
+
+# Copy updated shared folder
+# Safe COPY that doesn’t fail if empty
+COPY docker/shared/. ./shared/
+RUN [ -d ./shared ] || echo "⚠️ Shared folder missing, skipping"
+
+
+COPY docker/appdev/package.json . 
 # COPY docker/appdev/package-lock.json .
 
-# Copy shared scripts
-COPY docker/shared ./shared
+# Verify shared folder exists
 RUN [ -d ./shared ] || echo "⚠️ shared folder missing, skipping"
 
 RUN apt-get update && apt-get install -y curl unzip xz-utils git \
@@ -77,16 +107,31 @@ RUN echo "✅ AppDev stage completed"
 FROM ubuntu-base AS experimental
 WORKDIR /opt/experimental
 
-COPY docker/experimental/package.json .
+# Copy update script first, then update shared folder
+COPY docker/scripts/update_shared.sh /tmp/update_shared.sh
+RUN chmod +x /tmp/update_shared.sh \
+  && /tmp/update_shared.sh experimental || echo "⚠️ Shared folder update skipped"
+
+# Copy updated shared folder
+# Safe COPY that doesn’t fail if empty
+COPY docker/shared/. ./shared/
+RUN [ -d ./shared ] || echo "⚠️ Shared folder missing, skipping"
+
+
+# Copy package definition
+COPY docker/experimental/package.json . 
 # COPY docker/experimental/package-lock.json .
 
-# Copy shared scripts
-COPY docker/shared ./shared
+# Verify shared folder exists
 RUN [ -d ./shared ] || echo "⚠️ shared folder missing, skipping"
 
+# Install NPM packages (optional)
 RUN npm install || echo "⚠️ npm install failed, skipping"
 
 RUN echo "✅ Experimental stage completed"
+
+
+
 # =====================================================
 # ---------- Superset Embedded Block ----------
 # =====================================================
@@ -96,6 +141,12 @@ ARG DEV_GID=1000
 ARG MODE=prod
 
 WORKDIR /opt/superset
+
+# Copy shared scripts
+COPY docker/shared ./shared
+COPY docker/scripts/update_shared.sh /tmp/update_shared.sh
+RUN chmod +x /tmp/update_shared.sh \
+  && /tmp/update_shared.sh superset || echo "⚠️ Shared folder update skipped"
 
 # Copy Superset files
 COPY docker/superset/requirements.txt docker/superset/superset_config.py docker/superset/entrypoint.sh ./

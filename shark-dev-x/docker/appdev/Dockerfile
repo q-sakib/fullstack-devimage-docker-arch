@@ -39,27 +39,45 @@ RUN chmod +x /opt/setup/*.sh \
 # -------------------------------------------------------------
 # 🧱 Layered Setup (cached by stage)
 # -------------------------------------------------------------
-USER devuser
-WORKDIR /home/devuser
+# USER devuser
+# WORKDIR /home/devuser
 
-RUN /opt/setup/flutter_setup.sh \
-    && echo "✅ Flutter setup completed" \
-    && /opt/setup/node_setup.sh \
-    && echo "✅ Node.js setup completed"
-
+# -------------------------------------------------------------
+# 🧱 Layered Setup (cached by stage)
+# -------------------------------------------------------------
 USER root
+WORKDIR /opt
+
+# Run Flutter setup as root
+RUN /opt/setup/flutter_setup.sh \
+    && echo "✅ Flutter setup completed"
+
+# Install Node.js globally (remove NVM usage)
+RUN apt-get update && apt-get install -y curl gnupg2 \
+    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
+    && echo "✅ Node.js installed globally"
+
+# Run Android SDK setup as root
 RUN /opt/setup/android_setup.sh \
     && echo "✅ Android SDK setup completed"
 
+# -------------------------------------------------------------
+# 🧩 Validate Flutter & SDKs as devuser
+# -------------------------------------------------------------
 USER devuser
+WORKDIR /home/devuser
 
-# -------------------------------------------------------------
-# 🧩 Validate Flutter & SDKs
-# -------------------------------------------------------------
-RUN flutter doctor -v || true \
+# Set Flutter & Android SDK PATH
+ENV PATH=/opt/flutter/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:$PATH
+
+# Validate installations
+RUN git config --global --add safe.directory /opt/flutter \
+    && flutter doctor -v || true \
     && node -v \
     && java -version \
     && echo "✅ Flutter, Node.js, Java validated"
+
 
 # -------------------------------------------------------------
 # ✅ Entrypoint & CMD
