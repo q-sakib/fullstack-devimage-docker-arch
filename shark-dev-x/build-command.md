@@ -1,3 +1,5 @@
+# we always create our base image like arch debian or ubuntu first
+
 succsessful terminal command
 
 docker build -t local-experimental -f Dockerfile .
